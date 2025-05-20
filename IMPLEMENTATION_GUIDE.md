@@ -68,14 +68,14 @@ flow_master/
    # 创建Vue项目
    npm create vite@latest frontend -- --template vue
    cd frontend
-   
+
    # 安装依赖
    npm install
    npm install vue-router@4 pinia axios tailwindcss postcss autoprefixer
-   
+
    # 初始化Tailwind CSS
    npx tailwindcss init -p
-   
+
    # 启动开发服务器
    npm run dev
    ```
@@ -92,7 +92,7 @@ flow_master/
    ```bash
    # 创建虚拟环境
    python -m venv venv
-   
+
    # 激活虚拟环境
    # Windows
    venv\Scripts\activate
@@ -124,10 +124,10 @@ flow_master/
    ```bash
    # 连接MongoDB
    mongosh
-   
+
    # 创建数据库
    use flowmaster
-   
+
    # 创建集合
    db.createCollection("users")
    db.createCollection("tasks")
@@ -334,7 +334,7 @@ describe('TaskCard.vue', () => {
     })
     expect(wrapper.text()).toContain('测试任务')
   })
-  
+
   it('applies correct priority class', () => {
     const task = { title: '高优先级任务', priority: 5 }
     const wrapper = mount(TaskCard, {
@@ -388,7 +388,7 @@ async def test_create_task():
      [build]
        publish = "dist"
        command = "npm run build"
-     
+
      [[redirects]]
        from = "/*"
        to = "/index.html"
@@ -421,6 +421,189 @@ async def test_create_task():
 3. 设置数据库用户和网络访问
 4. 获取连接字符串并配置到后端环境变量
 
-## 8. 实施任务清单
+## 8. 持续集成与质量保障
+
+### 8.1 CI/CD 设置
+
+#### 8.1.1 GitHub Actions 配置
+
+在项目根目录创建 `.github/workflows/ci.yml` 文件：
+
+```yaml
+name: FlowMaster CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  frontend-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+      - name: Run linter
+        working-directory: ./frontend
+        run: npm run lint
+      - name: Run tests
+        working-directory: ./frontend
+        run: npm test
+
+  backend-test:
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:4.4
+        ports:
+          - 27017:27017
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+      - name: Install dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx
+      - name: Run tests
+        working-directory: ./backend
+        run: pytest
+```
+
+#### 8.1.2 前端测试配置
+
+在 `frontend/package.json` 中添加测试脚本：
+
+```json
+"scripts": {
+  "dev": "vite",
+  "build": "vite build",
+  "preview": "vite preview",
+  "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore",
+  "test": "vitest run",
+  "test:watch": "vitest",
+  "test:coverage": "vitest run --coverage"
+}
+```
+
+#### 8.1.3 后端测试配置
+
+在 `backend/pytest.ini` 中配置测试：
+
+```ini
+[pytest]
+testpaths = tests
+python_files = test_*.py
+python_functions = test_*
+asyncio_mode = auto
+```
+
+### 8.2 代码质量工具
+
+#### 8.2.1 ESLint 配置 (前端)
+
+在 `frontend/.eslintrc.js` 中：
+
+```javascript
+module.exports = {
+  root: true,
+  env: {
+    node: true,
+    browser: true,
+    es2021: true
+  },
+  extends: [
+    'plugin:vue/vue3-recommended',
+    'eslint:recommended'
+  ],
+  parserOptions: {
+    ecmaVersion: 2021
+  },
+  rules: {
+    'no-console': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
+    'no-debugger': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
+    'vue/multi-word-component-names': 'off'
+  }
+}
+```
+
+#### 8.2.2 Flake8 配置 (后端)
+
+在 `backend/.flake8` 中：
+
+```
+[flake8]
+max-line-length = 100
+exclude = .git,__pycache__,build,dist
+```
+
+### 8.3 自动化部署流程
+
+#### 8.3.1 前端部署 (Netlify)
+
+创建 `netlify.toml` 文件：
+
+```toml
+[build]
+  base = "frontend"
+  publish = "dist"
+  command = "npm run build"
+
+[context.production.environment]
+  VITE_API_URL = "https://api.flowmaster.example.com"
+
+[context.develop.environment]
+  VITE_API_URL = "https://dev-api.flowmaster.example.com"
+```
+
+#### 8.3.2 后端部署 (Heroku)
+
+创建 `Procfile` 文件：
+
+```
+web: cd backend && uvicorn app.main:app --host=0.0.0.0 --port=${PORT:-5000}
+```
+
+### 8.4 质量保障最佳实践
+
+1. **代码审查流程**：
+   - 所有代码变更通过Pull Request提交
+   - 至少一名团队成员审查并批准
+   - 自动化测试必须通过
+   - 遵循商定的代码风格和最佳实践
+
+2. **测试策略**：
+   - 单元测试：针对独立组件和函数
+   - 集成测试：测试组件间交互
+   - 端到端测试：模拟用户行为的完整流程测试
+   - 测试覆盖率目标：前端70%+，后端80%+
+
+3. **监控与日志**：
+   - 使用Sentry进行错误跟踪
+   - 实现结构化日志记录
+   - 设置性能监控
+   - 定期审查错误报告和性能指标
+
+4. **安全实践**：
+   - 定期依赖项更新
+   - 安全漏洞扫描
+   - 输入验证和输出转义
+   - 敏感数据加密
+
+## 9. 实施任务清单
 
 请参考 TASKS.md 文件获取详细的实施任务清单。
